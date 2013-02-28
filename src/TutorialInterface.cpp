@@ -1,0 +1,71 @@
+//###########################################################################
+// This file is part of LImA, a Library for Image Acquisition
+//
+// Copyright (C) : 2009-2011
+// European Synchrotron Radiation Facility
+// BP 220, Grenoble 38043
+// FRANCE
+//
+// This is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+//
+// This software is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, see <http://www.gnu.org/licenses/>.
+//###########################################################################
+#include "TutorialInterface.h"
+#include "TutorialDetInfoCtrlObj.h"
+#include "TutorialSyncCtrlObj.h"
+ 
+using namespace lima;
+using namespace lima::Tutorial;
+
+Interface::Interface()
+{
+  DEB_CONSTRUCTOR();
+}
+
+Interface::~Interface()
+{
+}
+
+void Interface::getCapList(CapList &cap_list) const
+{
+}
+
+void Interface::reset(ResetLevel reset_level)
+{
+}
+
+void Interface::prepareAcq()
+{
+  DEB_MEMBER_FUNCT();
+}
+
+void Interface::startAcq()
+{
+  DEB_MEMBER_FUNCT();
+}
+
+void Interface::stopAcq()
+{
+  DEB_MEMBER_FUNCT();
+}
+
+void Interface::getStatus(StatusType &status)
+{
+  DEB_MEMBER_FUNCT();
+
+  DEB_RETURN() << DEB_VAR1(status);
+}
+
+int Interface::getNbHwAcquiredFrames()
+{
+
+}
