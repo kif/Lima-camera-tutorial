@@ -34,6 +34,16 @@ public:
   _Callback(Interface& i) : m_interface(i) {}
   virtual bool newFrame(int frame_id,const unsigned char* srcPt)
   {
+    DEB_MEMBER_FUNCT();
+    DEB_PARAM() << DEB_VAR1(frame_id);
+
+    StdBufferCbMgr& buffer_mgr = m_interface.m_buffer_ctrl_obj.getBuffer();
+    void* framePt = buffer_mgr.getFrameBufferPtr(frame_id);
+    const FrameDim& fDim = buffer_mgr.getFrameDim();
+    memcpy(framePt,srcPt,fDim.getMemSize());
+    HwFrameInfoType frame_info;
+    frame_info.acq_frame_nb = frame_id;
+    return buffer_mgr.newFrameReady(frame_info);
   }
 private:
   Interface& m_interface;
@@ -42,16 +52,28 @@ private:
 Interface::Interface(const char* dev_path)
 {
   DEB_CONSTRUCTOR();
+  m_cbk = new _Callback(*this);
+  m_cam = new Camera(m_cbk,dev_path);
+  m_det_info = new DetInfoCtrlObj(*m_cam);
+  m_sync = new SyncCtrlObj(*m_cam);
 }
 
 Interface::~Interface()
 {
   DEB_DESTRUCTOR();
+  
+  delete m_sync;
+  delete m_det_info;
+  delete m_cam;
 }
 
 void Interface::getCapList(CapList &cap_list) const
 {
   DEB_MEMBER_FUNCT();
+  
+  cap_list.push_back(HwCap(m_sync));
+  cap_list.push_back(HwCap(m_det_info));
+  cap_list.push_back(HwCap(&m_buffer_ctrl_obj));
 }
 
 void Interface::reset(ResetLevel reset_level)
@@ -62,22 +84,32 @@ void Interface::reset(ResetLevel reset_level)
 void Interface::prepareAcq()
 {
   DEB_MEMBER_FUNCT();
+
+  m_cam->prepareAcq();
 }
 
 void Interface::startAcq()
 {
   DEB_MEMBER_FUNCT();
+      
+  StdBufferCbMgr& buffer_mgr = m_buffer_ctrl_obj.getBuffer();
+  buffer_mgr.setStartTimestamp(Timestamp::now());
+
+  m_cam->startAcq();
 }
 
 void Interface::stopAcq()
 {
   DEB_MEMBER_FUNCT();
+
+  m_cam->stopAcq();
 }
 
 void Interface::getStatus(StatusType &status)
 {
   DEB_MEMBER_FUNCT();
 
+  m_cam->getStatus(status);
   
   DEB_RETURN() << DEB_VAR1(status);
 }
@@ -85,4 +117,9 @@ void Interface::getStatus(StatusType &status)
 int Interface::getNbHwAcquiredFrames()
 {
   DEB_MEMBER_FUNCT();
+  
+  int acq_frames = m_cam->getNbHwAcquiredFrames();
+  
+  DEB_RETURN() << DEB_VAR1(acq_frames);
+  return acq_frames;
 }
