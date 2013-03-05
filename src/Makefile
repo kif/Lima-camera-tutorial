@@ -2,7 +2,7 @@ tutorial-objs = TutorialDetInfoCtrlObj.o TutorialSyncCtrlObj.o TutorialInterface
 
 SRCS = $(tutorial-objs:.o=.cpp) 
 
-CXXFLAGS += -I../include -I../../../hardware/include -I../../../common/include -I../../../third-party/Processlib/core/include -pthread -fPIC	
+CXXFLAGS += -I../include -I../../../hardware/include -I../../../common/include -I../../../third-party/Processlib/core/include -pthread -fPIC -g
 
 all:	Tutorial.o
 

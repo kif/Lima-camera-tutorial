@@ -22,25 +22,41 @@
 #include "TutorialInterface.h"
 #include "TutorialDetInfoCtrlObj.h"
 #include "TutorialSyncCtrlObj.h"
+#include "TutorialCamera.h"
  
 using namespace lima;
 using namespace lima::Tutorial;
 
-Interface::Interface()
+class Interface::_Callback : public Camera::Callback
+{
+  DEB_CLASS_NAMESPC(DebModCamera, "Interface::_Callback", "Tutorial");
+public:
+  _Callback(Interface& i) : m_interface(i) {}
+  virtual bool newFrame(int frame_id,const unsigned char* srcPt)
+  {
+  }
+private:
+  Interface& m_interface;
+};
+
+Interface::Interface(const char* dev_path)
 {
   DEB_CONSTRUCTOR();
 }
 
 Interface::~Interface()
 {
+  DEB_DESTRUCTOR();
 }
 
 void Interface::getCapList(CapList &cap_list) const
 {
+  DEB_MEMBER_FUNCT();
 }
 
 void Interface::reset(ResetLevel reset_level)
 {
+  //Not managed
 }
 
 void Interface::prepareAcq()
@@ -62,10 +78,11 @@ void Interface::getStatus(StatusType &status)
 {
   DEB_MEMBER_FUNCT();
 
+  
   DEB_RETURN() << DEB_VAR1(status);
 }
 
 int Interface::getNbHwAcquiredFrames()
 {
-
+  DEB_MEMBER_FUNCT();
 }

@@ -30,19 +30,20 @@ namespace Tutorial
     class Callback
     {
     public:
-      virtual void newFrame(const Data&) = 0;
+	virtual bool newFrame(int frame_id,const unsigned char*) = 0;
     };
 
     Camera(Callback*,const char* video_device = "/dev/video0");
     ~Camera();
     // --- Detector Info
-    void getMaxImageSize(Size& /out/);
+    void getMaxImageSize(Size& /Out/);
 
     void getCurrImageType(ImageType& /Out/);
     void setCurrImageType(ImageType);
       
     void getDetectorModel(std::string& det_model /Out/);
     // --- Syn Obj
+    void getMinMaxExpTime(double& min /Out/,double& max /Out/);
     void setExpTime(double  exp_time);
     void getExpTime(double& exp_time /out/);
       

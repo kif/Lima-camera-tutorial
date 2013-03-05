@@ -28,7 +28,7 @@ namespace Tutorial
 #include <TutorialInterface.h>
 %End
 public:
-    Interface();
+    Interface(const char* dev_path = "/dev/video0");
     virtual ~Interface();
 
     virtual void getCapList(std::vector<HwCap> &cap_list /Out/) const;

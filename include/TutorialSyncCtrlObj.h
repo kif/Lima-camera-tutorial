@@ -28,12 +28,13 @@ namespace lima
 {
   namespace Tutorial
   {
+    class Camera;
     class SyncCtrlObj : public HwSyncCtrlObj
     {
       friend class Interface;
       DEB_CLASS_NAMESPC(DebModCamera, "SyncCtrlObj", "Tutorial");
     public:
-      SyncCtrlObj();
+      SyncCtrlObj(Camera&);
       virtual ~SyncCtrlObj();
 
       virtual bool checkTrigMode(TrigMode trig_mode);
@@ -52,6 +53,7 @@ namespace lima
       virtual void getValidRanges(ValidRangesType& valid_ranges);
 
     private:
+      Camera&	m_cam;
     };
   }
 }

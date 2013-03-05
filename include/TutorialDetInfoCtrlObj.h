@@ -27,11 +27,12 @@ namespace lima
 {
   namespace Tutorial
   {
+    class Camera;
     class DetInfoCtrlObj : public HwDetInfoCtrlObj
     {
       DEB_CLASS_NAMESPC(DebModCamera, "DetInfoCtrlObj", "Tutorial");
     public:
-      DetInfoCtrlObj();
+      DetInfoCtrlObj(Camera&);
       virtual ~DetInfoCtrlObj();
 
       virtual void getMaxImageSize(Size& max_image_size);
@@ -48,7 +49,8 @@ namespace lima
       virtual void registerMaxImageSizeCallback(HwMaxImageSizeCallback& cb);
       virtual void unregisterMaxImageSizeCallback(HwMaxImageSizeCallback& cb);
     private:
-    HwMaxImageSizeCallbackGen 	m_mis_cb_gen;
+      HwMaxImageSizeCallbackGen m_mis_cb_gen;
+      Camera&			m_cam;
     };
   }
 }

@@ -23,7 +23,6 @@
 #define TUTORIALCAMERA_H
 #include <linux/videodev2.h>
 #include <libv4l2.h>
-#include "Data.h"
 #include "Debug.h"
 #include "SizeUtils.h"
 #include "Constants.h"
@@ -40,7 +39,7 @@ namespace lima
       class Callback
       {
       public:
-	virtual void newFrame(const Data&) = 0;
+	virtual bool newFrame(int frame_id,const unsigned char*) = 0;
       };
 
       Camera(Callback*,const char* video_device = "/dev/video0");
@@ -53,6 +52,7 @@ namespace lima
       
       void getDetectorModel(std::string& det_model);
       // --- Syn Obj
+      void getMinMaxExpTime(double& min,double& max);
       void setExpTime(double  exp_time);
       void getExpTime(double& exp_time);
       
@@ -67,14 +67,23 @@ namespace lima
       void getStatus(HwInterface::StatusType& status);
       int getNbHwAcquiredFrames();
     private:
-      Callback*	m_cbk;
-      int m_fd;
-      struct v4l2_buffer m_buffer;
-      unsigned char* m_buffers[2];
-      std::string m_det_model;
-      int m_nb_frames;
-      int m_acq_frame_id;
-      bool m_acq_started;
+      class _AcqThread;
+      friend class _AcqThread;
+
+      Callback*			m_cbk;
+      int 			m_fd;
+      struct v4l2_buffer 	m_buffer;
+      unsigned char* 		m_buffers[2];
+      std::string 		m_det_model;
+      int 			m_nb_frames;
+      int 			m_acq_frame_id;
+      bool 			m_acq_started;
+      bool			m_acq_thread_run;
+      std::list<int>		m_available_format;
+      _AcqThread*		m_acq_thread;
+      int			m_pipes[2];
+      bool			m_quit;
+      Cond			m_cond;
     };
   }
 }

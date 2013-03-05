@@ -24,18 +24,33 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/mman.h>
+#include <poll.h>
+#include <unistd.h>
 
 #include "TutorialCamera.h"
-
 using namespace lima;
 using namespace lima::Tutorial;
+
+class Camera::_AcqThread : public Thread
+{
+  DEB_CLASS_NAMESPC(DebModCamera, "Camera", "_AcqThread");
+public:
+  _AcqThread(Camera &aCam);
+
+protected:
+  virtual void threadFunction();
+
+private:
+  Camera& m_cam;
+};
 
 Camera::Camera(Camera::Callback* cbk,const char* video_device):
   m_cbk(cbk),
   m_fd(-1),
   m_nb_frames(1),
   m_acq_frame_id(-1),
-  m_acq_started(false)
+  m_acq_started(false),
+  m_quit(false)
 {
   DEB_CONSTRUCTOR();
 
@@ -61,6 +76,151 @@ Camera::Camera(Camera::Callback* cbk,const char* video_device):
   if(!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE))
     THROW_HW_ERROR(Error) << "Error: dev. doesn't have VIDEO_CAPTURE cap.";
 
+  struct v4l2_fmtdesc formatdesc;
+
+  formatdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  for(formatdesc.index = 0;v4l2_ioctl(m_fd, VIDIOC_ENUM_FMT, &formatdesc) != -1;
+      ++formatdesc.index)
+    {
+      m_available_format.push_back(formatdesc.pixelformat);
+      switch(formatdesc.pixelformat)
+	{
+	  /* RGB formats */
+	case V4L2_PIX_FMT_RGB332: 	DEB_TRACE() << "As V4L2_PIX_FMT_RGB332";break;
+	case V4L2_PIX_FMT_RGB444: 	DEB_TRACE() << "As V4L2_PIX_FMT_RGB444";break;
+	case V4L2_PIX_FMT_RGB555: 	DEB_TRACE() << "As V4L2_PIX_FMT_RGB555";break;
+	case V4L2_PIX_FMT_RGB565: 	DEB_TRACE() << "As V4L2_PIX_FMT_RGB565";break;
+	case V4L2_PIX_FMT_RGB555X: 	DEB_TRACE() << "As V4L2_PIX_FMT_RGB555X";break;
+	case V4L2_PIX_FMT_RGB565X: 	DEB_TRACE() << "As V4L2_PIX_FMT_RGB565X";break;
+	case V4L2_PIX_FMT_BGR24: 	DEB_TRACE() << "As V4L2_PIX_FMT_BGR24";break;
+	case V4L2_PIX_FMT_RGB24: 	DEB_TRACE() << "As V4L2_PIX_FMT_RGB24";break;
+	case V4L2_PIX_FMT_BGR32: 	DEB_TRACE() << "As V4L2_PIX_FMT_BGR32";break;
+	case V4L2_PIX_FMT_RGB32: 	DEB_TRACE() << "As V4L2_PIX_FMT_RGB32";break;
+
+	  /* Grey formats */
+	case V4L2_PIX_FMT_GREY: 	DEB_TRACE() << "As V4L2_PIX_FMT_GREY";break;
+	case V4L2_PIX_FMT_Y16: 		DEB_TRACE() << "As V4L2_PIX_FMT_Y16";break;
+
+	  /* Palette formats */
+	case V4L2_PIX_FMT_PAL8: 	DEB_TRACE() << "As V4L2_PIX_FMT_PAL8";break;
+
+	  /* Luminance+Chrominance formats */
+	case V4L2_PIX_FMT_YVU410: 	DEB_TRACE() << "As V4L2_PIX_FMT_YVU410";break;
+	case V4L2_PIX_FMT_YVU420: 	DEB_TRACE() << "As V4L2_PIX_FMT_YVU420";break;
+	case V4L2_PIX_FMT_YUYV: 	DEB_TRACE() << "As V4L2_PIX_FMT_YUYV";break;
+	case V4L2_PIX_FMT_YYUV: 	DEB_TRACE() << "As V4L2_PIX_FMT_YYUV";break;
+	case V4L2_PIX_FMT_YVYU: 	DEB_TRACE() << "As V4L2_PIX_FMT_YVYU";break;
+	case V4L2_PIX_FMT_UYVY: 	DEB_TRACE() << "As V4L2_PIX_FMT_UYVY";break;
+	case V4L2_PIX_FMT_VYUY: 	DEB_TRACE() << "As V4L2_PIX_FMT_VYUY";break;
+	case V4L2_PIX_FMT_YUV422P: 	DEB_TRACE() << "As V4L2_PIX_FMT_YUV422P";break;
+	case V4L2_PIX_FMT_YUV411P: 	DEB_TRACE() << "As V4L2_PIX_FMT_YUV411P";break;
+	case V4L2_PIX_FMT_Y41P: 	DEB_TRACE() << "As V4L2_PIX_FMT_Y41P";break;
+	case V4L2_PIX_FMT_YUV444: 	DEB_TRACE() << "As V4L2_PIX_FMT_YUV444";break;
+	case V4L2_PIX_FMT_YUV555: 	DEB_TRACE() << "As V4L2_PIX_FMT_YUV555";break;
+	case V4L2_PIX_FMT_YUV565: 	DEB_TRACE() << "As V4L2_PIX_FMT_YUV565";break;
+	case V4L2_PIX_FMT_YUV32: 	DEB_TRACE() << "As V4L2_PIX_FMT_YUV32";break;
+	case V4L2_PIX_FMT_YUV410: 	DEB_TRACE() << "As V4L2_PIX_FMT_YUV410";break;
+	case V4L2_PIX_FMT_YUV420: 	DEB_TRACE() << "As V4L2_PIX_FMT_YUV420";break;
+	case V4L2_PIX_FMT_HI240: 	DEB_TRACE() << "As V4L2_PIX_FMT_HI240";break;
+	case V4L2_PIX_FMT_HM12: 	DEB_TRACE() << "As V4L2_PIX_FMT_HM12";break;
+
+	  /* two planes -- one Y, one Cr + Cb interleaved  */
+	case V4L2_PIX_FMT_NV12: 	DEB_TRACE() << "As V4L2_PIX_FMT_NV12";break;
+	case V4L2_PIX_FMT_NV21: 	DEB_TRACE() << "As V4L2_PIX_FMT_NV21";break;
+	case V4L2_PIX_FMT_NV16: 	DEB_TRACE() << "As V4L2_PIX_FMT_NV16";break;
+	case V4L2_PIX_FMT_NV61: 	DEB_TRACE() << "As V4L2_PIX_FMT_NV61";break;
+
+	  /* Bayer formats - see http://www.siliconimaging.com/RGB%20Bayer.htm */
+	case V4L2_PIX_FMT_SBGGR8: 	DEB_TRACE() << "As V4L2_PIX_FMT_SBGGR8";break;
+	case V4L2_PIX_FMT_SGBRG8: 	DEB_TRACE() << "As V4L2_PIX_FMT_SGBRG8";break;
+	case V4L2_PIX_FMT_SGRBG8: 	DEB_TRACE() << "As V4L2_PIX_FMT_SGRBG8";break;
+	case V4L2_PIX_FMT_SGRBG10: 	DEB_TRACE() << "As V4L2_PIX_FMT_SGRBG10";break;
+	  /* 10bit raw bayer DPCM compressed to 8 bits */
+	case V4L2_PIX_FMT_SGRBG10DPCM8: DEB_TRACE() << "As V4L2_PIX_FMT_SGRBG10DPCM8";break;
+	  /*
+	   * 10bit raw bayer, expanded to 16 bits
+	   * xxxxrrrrrrrrrrxxxxgggggggggg xxxxggggggggggxxxxbbbbbbbbbb...
+	   */
+	case V4L2_PIX_FMT_SBGGR16: 	DEB_TRACE() << "As V4L2_PIX_FMT_SBGGR16";break;
+
+	  /* compressed formats */
+	case V4L2_PIX_FMT_MJPEG: 	DEB_TRACE() << "As V4L2_PIX_FMT_MJPEG";break;
+	case V4L2_PIX_FMT_JPEG: 	DEB_TRACE() << "As V4L2_PIX_FMT_JPEG";break;
+	case V4L2_PIX_FMT_DV: 		DEB_TRACE() << "As V4L2_PIX_FMT_DV";break;
+	case V4L2_PIX_FMT_MPEG: 	DEB_TRACE() << "As V4L2_PIX_FMT_MPEG";break;
+
+	  /*  Vendor-specific formats   */
+	case V4L2_PIX_FMT_WNVA: 	DEB_TRACE() << "As V4L2_PIX_FMT_WNVA";break;
+	case V4L2_PIX_FMT_SN9C10X: 	DEB_TRACE() << "As V4L2_PIX_FMT_SN9C10X";break;
+	case V4L2_PIX_FMT_SN9C20X_I420: DEB_TRACE() << "As V4L2_PIX_FMT_SN9C20X_I420";break;
+	case V4L2_PIX_FMT_PWC1: 	DEB_TRACE() << "As V4L2_PIX_FMT_PWC1";break;
+	case V4L2_PIX_FMT_PWC2: 	DEB_TRACE() << "As V4L2_PIX_FMT_PWC2";break;
+	case V4L2_PIX_FMT_ET61X251: 	DEB_TRACE() << "As V4L2_PIX_FMT_ET61X251";break;
+	case V4L2_PIX_FMT_SPCA501: 	DEB_TRACE() << "As V4L2_PIX_FMT_SPCA501";break;
+	case V4L2_PIX_FMT_SPCA505: 	DEB_TRACE() << "As V4L2_PIX_FMT_SPCA505";break;
+	case V4L2_PIX_FMT_SPCA508: 	DEB_TRACE() << "As V4L2_PIX_FMT_SPCA508";break;
+	case V4L2_PIX_FMT_SPCA561: 	DEB_TRACE() << "As V4L2_PIX_FMT_SPCA561";break;
+	case V4L2_PIX_FMT_PAC207: 	DEB_TRACE() << "As V4L2_PIX_FMT_PAC207";break;
+	case V4L2_PIX_FMT_MR97310A: 	DEB_TRACE() << "As V4L2_PIX_FMT_MR97310A";break;
+	case V4L2_PIX_FMT_SQ905C: 	DEB_TRACE() << "As V4L2_PIX_FMT_SQ905C";break;
+	case V4L2_PIX_FMT_PJPG: 	DEB_TRACE() << "As V4L2_PIX_FMT_PJPG";break;
+	case V4L2_PIX_FMT_OV511: 	DEB_TRACE() << "As V4L2_PIX_FMT_OV511";break;
+	case V4L2_PIX_FMT_OV518: 	DEB_TRACE() << "As V4L2_PIX_FMT_OV518";break;
+	}
+    }
+  
+  setCurrImageType(Bpp8);
+
+  struct v4l2_streamparm streamparm;
+  streamparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  ret = v4l2_ioctl(m_fd,VIDIOC_G_PARM,&streamparm);
+  if(ret == -1)
+    THROW_HW_ERROR(Error) << "Error querying stream param : " << strerror(errno);
+
+  if(streamparm.parm.capture.capability & V4L2_CAP_TIMEPERFRAME)
+    {
+      DEB_TRACE() << "Time per frame supported";
+      struct v4l2_format format;
+      format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+ 
+      v4l2_ioctl(m_fd,VIDIOC_G_FMT,&format);
+
+      struct v4l2_frmivalenum frmivalenum;
+      frmivalenum.width = format.fmt.pix.width;
+      frmivalenum.height = format.fmt.pix.height;
+      frmivalenum.pixel_format = format.fmt.pix.pixelformat;
+      for(frmivalenum.index = 0;v4l2_ioctl(m_fd,VIDIOC_ENUM_FRAMEINTERVALS,&frmivalenum) != -1;
+	  ++frmivalenum.index)
+	{
+	  if(frmivalenum.type == V4L2_FRMIVAL_TYPE_DISCRETE)
+	    DEB_TRACE() << frmivalenum.discrete.numerator 
+			<< "/" << frmivalenum.discrete.denominator;
+	  else if(frmivalenum.type == V4L2_FRMIVAL_TYPE_STEPWISE)
+	    {
+	      DEB_TRACE() << "min : " 
+			  << frmivalenum.stepwise.min.numerator << "/"
+			  << frmivalenum.stepwise.min.denominator;
+	      DEB_TRACE() << "max : " 
+			  << frmivalenum.stepwise.max.numerator << "/"
+			  << frmivalenum.stepwise.max.denominator;
+	      DEB_TRACE() << "step : " 
+			  << frmivalenum.stepwise.step.numerator << "/"
+			  << frmivalenum.stepwise.step.denominator;
+	    }
+	  else
+	    DEB_TRACE() << "Continuous";
+	    
+	}
+    }
+     
+  
+
+  struct v4l2_control ctrl;
+  ctrl.id = V4L2_CID_EXPOSURE_AUTO;
+  ctrl.value = V4L2_EXPOSURE_MANUAL;
+  ret = v4l2_ioctl(m_fd,VIDIOC_S_CTRL,&ctrl);
+  if(ret == -1)
+    THROW_HW_ERROR(Error) << "Can't set exposure mode to manual" << strerror(errno);
 
   struct v4l2_requestbuffers requestbuff;
   requestbuff.count = sizeof(m_buffers) / sizeof(unsigned char*);
@@ -90,14 +250,30 @@ Camera::Camera(Camera::Callback* cbk,const char* video_device):
       memset(p, 0, m_buffer.length);
       m_buffers[i] = (unsigned char *)p;
     }
+
+  if(pipe(m_pipes))
+    THROW_HW_ERROR(Error) << "Can't open pipe";
+
+  m_acq_thread = new _AcqThread(*this);
+  m_acq_thread->start();
 }
 
 Camera::~Camera()
 {
-  stopAcq();
+  DEB_DESTRUCTOR();
+
+  AutoMutex aLock(m_cond.mutex());
+  m_quit = true;
+  m_cond.broadcast();
+  close(m_pipes[1]);
+  aLock.unlock();
+
+  delete m_acq_thread;
+  close(m_pipes[0]);
 
   for(int i = 0;i < sizeof(m_buffers) / sizeof(unsigned char*);++i)
-    v4l2_munmap(m_buffers[i], m_buffer.length);
+    if(v4l2_munmap(m_buffers[i], m_buffer.length))
+      DEB_ERROR() << "unmapping error: " << strerror(errno);
 
   v4l2_close(m_fd);
 }
@@ -130,8 +306,13 @@ void Camera::getCurrImageType(ImageType& image_format)
   
   switch(format.fmt.pix.pixelformat)
     {
-    case V4L2_PIX_FMT_GREY: 	image_format = Bpp8;break;
-    case V4L2_PIX_FMT_Y16: 	image_format = Bpp16;break;
+    case V4L2_PIX_FMT_GREY:
+    case V4L2_PIX_FMT_YUYV:
+    case V4L2_PIX_FMT_YUV420:
+    case V4L2_PIX_FMT_YVU420:
+      image_format = Bpp8;break;
+    case V4L2_PIX_FMT_Y16:
+ 	image_format = Bpp16;break;
     default:
       THROW_HW_ERROR(NotSupported) << "Not yet managed";
     }
@@ -149,16 +330,32 @@ void Camera::setCurrImageType(ImageType image_format)
   if(ret == -1)
     THROW_HW_ERROR(Error) << "Can't get the format: " << strerror(errno);
 
-  switch(image_format)
+  bool found = false;
+  for(std::list<int>::iterator i = m_available_format.begin();
+      !found && i != m_available_format.end();++i)
     {
-    case Bpp8:
-      format.fmt.pix.pixelformat = V4L2_PIX_FMT_GREY;break;
-    case Bpp16:
-      format.fmt.pix.pixelformat = V4L2_PIX_FMT_Y16;break;
-    default:
-       THROW_HW_ERROR(NotSupported) << "Not yet managed";
+      switch(*i)
+	{
+	case V4L2_PIX_FMT_GREY:
+	case V4L2_PIX_FMT_YUV420:
+	case V4L2_PIX_FMT_YVU420:
+	  if(image_format == Bpp8)
+	    {
+	      found = true;
+	      format.fmt.pix.pixelformat = *i;
+	    }
+	  break;
+	case V4L2_PIX_FMT_Y16:
+	  if(image_format == Bpp16)
+	    {
+	      found = true;
+	      format.fmt.pix.pixelformat = *i;
+	    }
+	  break;
+	}
     }
-
+  if(!found)
+    THROW_HW_ERROR(NotSupported) << "Not supposted by the camera";
   
   ret = v4l2_ioctl(m_fd,VIDIOC_S_FMT,&format);
   if(ret == -1)
@@ -173,7 +370,19 @@ void Camera::getDetectorModel(std::string& det_model)
   
   DEB_RETURN() << DEB_VAR1(det_model);
 }
+void Camera::getMinMaxExpTime(double& min,double& max)
+{
+  DEB_MEMBER_FUNCT();
+  
+  struct v4l2_queryctrl query;
+  query.id = V4L2_CID_EXPOSURE_ABSOLUTE;
+  int ret = v4l2_ioctl(m_fd,VIDIOC_QUERYCTRL,&query);
+  if(ret == -1)
+    THROW_HW_ERROR(Error) << "Can't get exposure time range " << strerror(errno);
 
+  min = 1 / (query.maximum * 5.),max = 1 / (query.minimum * 5.);
+  DEB_RETURN() << DEB_VAR2(min,max);
+}
 void Camera::getExpTime(double &exp_time)
 {
   DEB_MEMBER_FUNCT();
@@ -182,9 +391,9 @@ void Camera::getExpTime(double &exp_time)
   ctrl.id = V4L2_CID_EXPOSURE_ABSOLUTE;
   int ret = v4l2_ioctl(m_fd,VIDIOC_G_CTRL,&ctrl);
   if(ret == -1)
-    THROW_HW_ERROR(Error) << "Can't get exposure time" << strerror(errno);
+    THROW_HW_ERROR(Error) << "Can't get exposure time " << strerror(errno);
   
-  exp_time = ctrl.value / 1000;
+  exp_time = 1 / (ctrl.value * 5.);
 
   DEB_RETURN() << DEB_VAR1(exp_time);
 }
@@ -196,7 +405,7 @@ void Camera::setExpTime(double exp_time)
 
   struct v4l2_control ctrl;
   ctrl.id = V4L2_CID_EXPOSURE_ABSOLUTE;
-  ctrl.value = exp_time * 1000;
+  ctrl.value = 5 / exp_time ;
   int ret = v4l2_ioctl(m_fd,VIDIOC_S_CTRL,&ctrl);
   if(ret == -1)
     THROW_HW_ERROR(Error) << "Can't set exposure time" << strerror(errno);
@@ -221,25 +430,124 @@ void Camera::reset(HwInterface::ResetLevel)
 
 void Camera::prepareAcq()
 {
+  DEB_MEMBER_FUNCT();
+
   m_acq_frame_id = -1;
+  for(int i = 0;
+      i < sizeof(m_buffers) / sizeof(unsigned char*);++i)
+    {
+      m_buffer.index = i;
+      int ret = v4l2_ioctl(m_fd,VIDIOC_QBUF,&m_buffer);
+      if(ret == -1)
+	THROW_HW_ERROR(Error) << "Error queue buff " << strerror(errno);
+      if(m_nb_frames && i > m_nb_frames) break;
+    }
 }
 
 void Camera::startAcq()
 {
+  DEB_MEMBER_FUNCT();
+
+  enum v4l2_buf_type buff_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  if(v4l2_ioctl(m_fd,VIDIOC_STREAMON,&buff_type) == -1)
+    THROW_HW_ERROR(Error) << "Error starting stream : " << strerror(errno);
+
+  AutoMutex aLock(m_cond.mutex());
   m_acq_started = true;
+  m_cond.broadcast();
 }
 
 void Camera::stopAcq()
 {
+  DEB_MEMBER_FUNCT();
+
+  AutoMutex aLock(m_cond.mutex());
   m_acq_started = false;
+  write(m_pipes[1],"|",1);
+  aLock.unlock();
 }
 
 void Camera::getStatus(HwInterface::StatusType& status)
 {
-  status.set(m_acq_started ? HwInterface::StatusType::Exposure : HwInterface::StatusType::Ready);
+  status.set(m_acq_thread_run ? HwInterface::StatusType::Exposure : HwInterface::StatusType::Ready);
 }
 
 int Camera::getNbHwAcquiredFrames()
 {
   return m_acq_frame_id + 1;
+}
+// Acquisition thread
+
+Camera::_AcqThread::_AcqThread(Camera& aCam) :
+  m_cam(aCam)
+{
+  pthread_attr_setscope(&m_thread_attr,PTHREAD_SCOPE_PROCESS);
+}
+//---------------------------
+//- Camera::_AcqThread::threadFunction()
+//---------------------------
+void Camera::_AcqThread::threadFunction()
+{
+  struct pollfd fds[2];
+  fds[0].fd = m_cam.m_pipes[0];
+  fds[0].events = POLLIN;
+  fds[1].fd = m_cam.m_fd;
+  fds[1].events = POLLIN;
+
+  DEB_MEMBER_FUNCT();
+  AutoMutex aLock(m_cam.m_cond.mutex());
+  
+  while(!m_cam.m_quit)
+    {
+      while(!m_cam.m_acq_started && !m_cam.m_quit)
+	{
+	  m_cam.m_acq_thread_run = false;
+	  m_cam.m_cond.wait();
+	}
+      m_cam.m_acq_thread_run = true;
+      if(m_cam.m_quit) return;
+
+      bool continueAcq = true;
+      while(continueAcq && 
+	    (!m_cam.m_nb_frames || m_cam.m_acq_frame_id < (m_cam.m_nb_frames - 1)))
+	{
+	  aLock.unlock();
+	  poll(fds,2,-1);
+
+	  if(fds[0].revents)
+	    {
+	      char buffer[1024];
+	      read(m_cam.m_pipes[0],buffer,sizeof(buffer));
+
+	      aLock.lock();
+	      continueAcq = m_cam.m_acq_started && !m_cam.m_quit;
+	    }
+	  else
+	    {
+	      int ret = v4l2_ioctl(m_cam.m_fd,VIDIOC_DQBUF,&m_cam.m_buffer);
+	      if(ret == -1)
+		{
+		  DEB_ERROR() << "Error dequeue buff : " << strerror(errno);
+		  continueAcq = false;
+		}
+	      else
+		{
+		  aLock.lock();
+		  ++m_cam.m_acq_frame_id;
+		  DEB_TRACE() << "Acq frame nb : " << m_cam.m_acq_frame_id;
+		  if(m_cam.m_cbk)
+		    continueAcq = m_cam.m_cbk->newFrame(m_cam.m_acq_frame_id,
+							m_cam.m_buffers[m_cam.m_buffer.index]);
+		  if(!m_cam.m_nb_frames ||
+		     m_cam.m_acq_frame_id < (m_cam.m_nb_frames - sizeof(m_cam.m_buffers) / 
+					     sizeof(unsigned char*)))
+		    v4l2_ioctl(m_cam.m_fd,VIDIOC_QBUF,&m_cam.m_buffer);
+		}
+	    }
+	}
+      m_cam.m_acq_started = false;
+      enum v4l2_buf_type buff_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+      if(v4l2_ioctl(m_cam.m_fd,VIDIOC_STREAMOFF,&buff_type) == -1)
+	DEB_ERROR() << "Error stopping stream : " << strerror(errno);
+    }
 }
