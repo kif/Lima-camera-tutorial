@@ -35,35 +35,46 @@ DetInfoCtrlObj::~DetInfoCtrlObj()
 
 void DetInfoCtrlObj::getMaxImageSize(Size& max_image_size)
 {
-
+  m_cam.getMaxImageSize(max_image_size);
 }
 
 void DetInfoCtrlObj::getDetectorImageSize(Size& det_image_size)
 {
+  DEB_MEMBER_FUNCT();
+  m_cam.getMaxImageSize(det_image_size);
 }
 
 void DetInfoCtrlObj::getDefImageType(ImageType& def_image_type)
 {
+  def_image_type = Bpp8;
 }
 
 void DetInfoCtrlObj::getCurrImageType(ImageType& curr_image_type)
 {
+  curr_image_type = Bpp8;
 }
 
 void DetInfoCtrlObj::setCurrImageType(ImageType  curr_image_type)
 {
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(curr_image_type);
+  if(curr_image_type != Bpp8)
+    THROW_HW_ERROR(NotSupported) << DEB_VAR1(curr_image_type) << " is not available";
 }
 
 void DetInfoCtrlObj::getPixelSize(double& x_size,double &y_size)
 {
+  x_size = y_size = -1;		// Don't know
 }
 
 void DetInfoCtrlObj::getDetectorType(std::string& det_type)
 {
+  det_type = "Tutorial";
 }
 
 void DetInfoCtrlObj::getDetectorModel(std::string& det_model)
 {
+  m_cam.getDetectorModel(det_model);
 }
 
 void DetInfoCtrlObj::registerMaxImageSizeCallback(HwMaxImageSizeCallback& cb)
