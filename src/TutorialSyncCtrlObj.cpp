@@ -38,19 +38,28 @@ bool SyncCtrlObj::checkTrigMode(TrigMode trig_mode)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(trig_mode);
+
+  bool returnValue = trig_mode == IntTrig;
+
+  DEB_RETURN() << DEB_VAR1(returnValue);
+
+  return returnValue;
 }
 
 void SyncCtrlObj::setTrigMode(TrigMode trig_mode)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(trig_mode);
+
+  if(!checkTrigMode(trig_mode))
+    THROW_HW_ERROR(InvalidValue) << DEB_VAR1(trig_mode) << " is not supported";
 }
 
 void SyncCtrlObj::getTrigMode(TrigMode& trig_mode)
 {
   DEB_MEMBER_FUNCT();
 
-
+  trig_mode = IntTrig;
 
   DEB_RETURN() << DEB_VAR1(trig_mode);
 }
@@ -59,13 +68,15 @@ void SyncCtrlObj::setExpTime(double exp_time)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(exp_time);
+
+  m_cam.setExpTime(exp_time);
 }
 
 void SyncCtrlObj::getExpTime(double& exp_time)
 {
   DEB_MEMBER_FUNCT();
 
-
+  m_cam.getExpTime(exp_time);
 
   DEB_RETURN() << DEB_VAR1(exp_time);
 }
@@ -90,12 +101,14 @@ void SyncCtrlObj::setNbHwFrames(int nb_frames)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(nb_frames);
+  m_cam.setNbHwFrames(nb_frames);
 }
 
 void SyncCtrlObj::getNbHwFrames(int& nb_frames)
 {
   DEB_MEMBER_FUNCT();
 
+  m_cam.getNbHwFrames(nb_frames);
 
   DEB_RETURN() << DEB_VAR1(nb_frames);
 }
@@ -104,6 +117,11 @@ void SyncCtrlObj::getValidRanges(ValidRangesType& valid_ranges)
 {
   DEB_MEMBER_FUNCT();
 
+  m_cam.getMinMaxExpTime(valid_ranges.min_exp_time,
+			 valid_ranges.max_exp_time);
+
+  valid_ranges.min_lat_time = 0.;
+  valid_ranges.max_lat_time = 0.;
 
   DEB_RETURN() << DEB_VAR1(valid_ranges);
 }
