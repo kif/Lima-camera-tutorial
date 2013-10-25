@@ -220,7 +220,7 @@ Camera::Camera(Camera::Callback* cbk,const char* video_device):
   ctrl.value = V4L2_EXPOSURE_MANUAL;
   ret = v4l2_ioctl(m_fd,VIDIOC_S_CTRL,&ctrl);
   if(ret == -1)
-    THROW_HW_ERROR(Error) << "Can't set exposure mode to manual" << strerror(errno);
+    DEB_WARNING() << "Can't set exposure mode to manual" << strerror(errno);
 
   struct v4l2_requestbuffers requestbuff;
   requestbuff.count = sizeof(m_buffers) / sizeof(unsigned char*);
@@ -378,7 +378,12 @@ void Camera::getMinMaxExpTime(double& min,double& max)
   query.id = V4L2_CID_EXPOSURE_ABSOLUTE;
   int ret = v4l2_ioctl(m_fd,VIDIOC_QUERYCTRL,&query);
   if(ret == -1)
-    THROW_HW_ERROR(Error) << "Can't get exposure time range " << strerror(errno);
+    {
+      DEB_WARNING() << "Can't get exposure time range " << strerror(errno);
+      min = 1e-6;
+      max = 30;
+      return;
+    }
 
   min = 1 / (query.maximum * 5.),max = 1 / (query.minimum * 5.);
   DEB_RETURN() << DEB_VAR2(min,max);
@@ -408,7 +413,7 @@ void Camera::setExpTime(double exp_time)
   ctrl.value = 5 / exp_time ;
   int ret = v4l2_ioctl(m_fd,VIDIOC_S_CTRL,&ctrl);
   if(ret == -1)
-    THROW_HW_ERROR(Error) << "Can't set exposure time" << strerror(errno);
+    DEB_WARNING() << "Can't set exposure time" << strerror(errno);
 }
 
 void Camera::setNbHwFrames(int nb_frames)
